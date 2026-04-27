@@ -1,81 +1,74 @@
 package HttpMaker;
 
-import java.util.List;
-import java.util.Scanner;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import com.google.gson.Gson;
 
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.api.Request;
 import org.eclipse.jetty.client.util.StringContentProvider;
+import org.eclipse.jetty.http.HttpMethod;
 
-public class HttpSender {
+public class HttpSender implements AutoCloseable {
+    private final Gson gson;
+    private final HttpClient httpClient;
 
-	public HttpSender() {
-		super();
-	}
+    public HttpSender() {
+        this.gson = new Gson();
+        this.httpClient = new HttpClient();
+    }
 
-	public ContentResponse httpClientGet(String targetUrl) {
-		
-		HttpClient httpClient = new HttpClient();
-		
-		try {
-			httpClient.start();
-			
-			Request request = httpClient.newRequest(targetUrl).method("GET");
-			request.header("x-requestId", "test");
-			
-//			만약 Request가 온 그대로 다시 보내 줄 경우의 get 파라미터 코드
-//			if(queryString != null) {
-//				String[] queryParams = queryString.split("&");
-//				for(String param : queryParams) {
-//					String[] keyValue = param.split("=");
-//					if(keyValue.length == 2) {
-//						String paramName = keyValue[0];
-//						String paramValue = keyValue[1];
-//						request.param(paramName, paramValue); // -> Get의 파라미터
-//					}
-//				}
-//			}
-			
-			ContentResponse response = request.send();
-			
-			return response;
-		} catch (Exception e) {
-			e.printStackTrace();
-		} finally {
-			try {
-				httpClient.stop();
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-		}
-		return null;
-	}
-	
-	public ContentResponse httpClientPost(String targetUrl, String bodyData) {
-		
-		HttpClient httpClient = new HttpClient();
-		try {
-			httpClient.start();
-			
-			Request request = httpClient.newRequest(targetUrl).method("POST");
-			request.header("Content-Type", "application/json");
-			request.content(new StringContentProvider(bodyData));
-			
-			ContentResponse response = request.send();
-			
-			return response;
-		} catch (Exception e) {
-			e.printStackTrace();
-		} finally {
-			try {
-				httpClient.stop();
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-		}
-		return null;
-	}
+    public void start() throws Exception {
+        if (!httpClient.isStarted()) {
+            httpClient.start();
+        }
+    }
 
-	
+    public ContentResponse get(String targetUrl, Map<String, String> headers) throws Exception {
+        return send(HttpMethod.GET, targetUrl, headers, null);
+    }
+
+    public ContentResponse postJson(String targetUrl, String jsonBody) throws Exception {
+        Map<String, String> headers = new LinkedHashMap<String, String>();
+        headers.put("Content-Type", "application/json");
+        return send(HttpMethod.POST, targetUrl, headers, jsonBody);
+    }
+
+    public ContentResponse postJson(String targetUrl, Object body) throws Exception {
+        return postJson(targetUrl, gson.toJson(body));
+    }
+
+    public <T> T fromJson(String json, Class<T> type) {
+        return gson.fromJson(json, type);
+    }
+
+    public ContentResponse get(String targetUrl) throws Exception {
+        return send(HttpMethod.GET, targetUrl, Collections.<String, String>emptyMap(), null);
+    }
+
+    private ContentResponse send(HttpMethod method, String targetUrl, Map<String, String> headers, String body)
+            throws Exception {
+        Request request = httpClient.newRequest(targetUrl).method(method);
+
+        for (Map.Entry<String, String> header : headers.entrySet()) {
+            request.header(header.getKey(), header.getValue());
+        }
+
+        if (body != null) {
+            request.content(new StringContentProvider("application/json", body, StandardCharsets.UTF_8));
+        }
+
+        return request.send();
+    }
+
+    @Override
+    public void close() throws Exception {
+        if (httpClient.isStarted()) {
+            httpClient.stop();
+        }
+    }
 }

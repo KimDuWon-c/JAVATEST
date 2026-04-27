@@ -1,64 +1,95 @@
 package HttpMaker;
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 
-import org.eclipse.jetty.server.Request;
-import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.handler.AbstractHandler;
+import java.io.BufferedReader;
+import java.io.IOException;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import java.io.BufferedReader;
-import java.io.IOException;
+import org.eclipse.jetty.server.Request;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.handler.AbstractHandler;
 
-public class HttpReceiver {
+import com.google.gson.Gson;
 
-    static void startServer(int port, AbstractHandler handler) {
-        Server server = new Server(port);
-        server.setHandler(handler);
+public class HttpReceiver implements AutoCloseable {
+    private final Gson gson;
+    private final Server server;
 
-        try {
-            server.start();
-        } catch (Exception e) {
-            e.printStackTrace();
+    public HttpReceiver(int port) {
+        this(port, new MonitoringReportService(new AIAgentRegistry(), new FileIO.fileInput()));
+    }
+
+    public HttpReceiver(int port, MonitoringReportService monitoringReportService) {
+        this.gson = new Gson();
+        this.server = new Server(port);
+        this.server.setHandler(new MonitoringReportHandler(monitoringReportService));
+    }
+
+    public void start() throws Exception {
+        server.start();
+    }
+
+    public void stop() throws Exception {
+        server.stop();
+    }
+
+    @Override
+    public void close() throws Exception {
+        if (server.isStarted() || server.isStarting()) {
+            server.stop();
         }
     }
 
-    static class ServerHandler extends AbstractHandler {
-        private String serverName;
+    private class MonitoringReportHandler extends AbstractHandler {
+        private final MonitoringReportService monitoringReportService;
 
-        public ServerHandler(String serverName) {
-            this.serverName = serverName;
+        private MonitoringReportHandler(MonitoringReportService monitoringReportService) {
+            this.monitoringReportService = monitoringReportService;
         }
 
         @Override
         public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response)
                 throws IOException, ServletException {
-            // HTTP 요청 처리
-            response.setContentType("text/html;charset=utf-8");
-//			"application/json"
-            response.setStatus(HttpServletResponse.SC_OK);
-            baseRequest.setHandled(true);
-
-
-            // GET 방식일 떄 URL ? 뒤의 값들
-            String queryString = request.getQueryString();  
-
-
-            // POST 방식일 떄 들어온 데이터 처리
-            StringBuilder requestBody = new StringBuilder();
-            BufferedReader reader = request.getReader();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                requestBody.append(line);
+            if (!"/monitoring/report".equals(target)) {
+                return;
             }
-            String data = requestBody.toString();
 
-            response.getWriter().println(queryString);
-            response.getWriter().println(data);
+            baseRequest.setHandled(true);
+            response.setContentType("application/json;charset=utf-8");
+
+            if (!"POST".equalsIgnoreCase(request.getMethod())) {
+                response.setStatus(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+                response.getWriter().write(gson.toJson(new ErrorResponse("Only POST is supported.")));
+                return;
+            }
+
+            try {
+                MonitoringReportRequest reportRequest = gson.fromJson(readBody(request), MonitoringReportRequest.class);
+                MonitoringReportResponse reportResponse = monitoringReportService.createReport(reportRequest);
+                response.setStatus(HttpServletResponse.SC_OK);
+                response.getWriter().write(gson.toJson(reportResponse));
+            } catch (IllegalArgumentException exception) {
+                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                response.getWriter().write(gson.toJson(new ErrorResponse(exception.getMessage())));
+            } catch (Exception exception) {
+                response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+                response.getWriter().write(gson.toJson(new ErrorResponse(exception.getMessage())));
+            }
+        }
+
+        private String readBody(HttpServletRequest request) throws IOException {
+            StringBuilder requestBody = new StringBuilder();
+
+            try (BufferedReader reader = request.getReader()) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    requestBody.append(line);
+                }
+            }
+
+            return requestBody.toString();
         }
     }
 }
