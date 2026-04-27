@@ -1163,3 +1163,56 @@ java -cp "bin;libs/*" HttpMaker.MainHttp
 ```powershell
 java -cp "bin;libs/*" HttpMaker.ManualTestMain
 ```
+
+
+1. 파일 파싱
+readLines(...)
+readParsedLines(...)
+parseLines(...)
+
+2. 파일 파싱 및 고급화
+
+FileRecord.java
+DataType.java
+DateTimeRange.java
+MatchSummary.java
+
+readPredictionRecords(...)
+parsePredictionRecord(...)
+calculateMatchSummary(...)
+createMonthlyRangeFromHour(...)
+createRangeFromHours(...)
+filterByRange(...)
+filterByTypeAndRange(...)
+findMonitoringRecordsForMonthlyRange(...)
+groupByRequestId(...)
+
+P/A 비교
+시간 범위 조회
+requestId별 그룹화
+같은 실제 업무용 해석까지 붙는 단계입니다.
+3. HTTP 통신 시작
+HttpReceiver.java
+HttpSender.java
+역할은 단순합니다.
+
+HttpReceiver는 Jetty 서버를 띄움
+HttpSender는 Jetty HttpClient로 요청을 보냄
+
+4. 통신 고급화
+MonitoringReportService.java
+AIAgentRegistry.java
+AIAgentInfo.java
+MonitoringReportRequest.java
+TimeWindow.java
+MonitoringReportResponse.java
+ErrorResponse.java
+여기서는 흐름이 이렇게 됩니다.
+
+클라이언트가 modelName, timeWindow를 JSON으로 보냄
+서버가 요청 DTO로 받음
+MonitoringReportService가 에이전트 정보 조회
+연결된 파일을 읽음
+시간 범위와 P/A 집계를 적용
+응답 DTO를 JSON으로 반환
+즉 이 단계는 “HTTP가 된다”를 넘어서 “업무 의미를 가진 API 서비스”가 됩니다.
