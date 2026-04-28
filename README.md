@@ -323,6 +323,222 @@ Use these classes in Eclipse:
   - Prints `[PASS]` for each check
   - Good for quick regression checks after code changes
 
+## Copy-paste friendly package
+
+If you want to reuse this in another project, use the new reusable package:
+
+- `src/monitoring`
+
+This package was separated so you can copy it more easily into another Java project.
+
+Recommended copy targets:
+
+- `src/monitoring/file`
+- `src/monitoring/model`
+- `src/monitoring/service`
+- `src/monitoring/http`
+
+Optional demo package:
+
+- `src/monitoring/demo`
+
+What else you need in the target project:
+
+- the same jars from `libs`
+- a monitoring data file such as `monitoring-data.txt`
+
+Reusable entry points:
+
+- `monitoring.demo.DemoMain`
+- `monitoring.demo.ManualVerificationMain`
+
+## Reusable package class guide
+
+This section is the quickest way to understand the reusable `monitoring` package.
+
+### `monitoring.file`
+
+`MonitoringFileService`
+
+- Role:
+  - main file parsing and JSON utility service
+  - reads text files
+  - parses monitoring lines
+  - filters records by time and type
+  - calculates match summary
+
+- Main methods:
+  - `readLines(path)`
+    - reads raw text lines
+  - `readParsedLines(path, parser)`
+    - reads a file and parses each line with custom logic
+  - `readMonitoringRecords(path)`
+    - reads the default monitoring format
+  - `parseMonitoringRecord(line, lineNumber)`
+    - parses one `reqId#time#type#value` line
+  - `calculateMatchSummary(records)`
+    - compares latest `P` and `A` values by request id
+  - `createRangeFromHours(startHour, endHour)`
+    - builds a direct time range
+  - `createMonthlyRangeFromHour(hour)`
+    - builds a monthly range from month start to target hour
+  - `filterByRange(records, range)`
+    - keeps records only inside a time window
+  - `filterByTypeAndRange(records, type, range)`
+    - keeps only `P` or `A` inside a time window
+  - `readJson(path, type)`
+    - reads JSON file into a Java object
+  - `writeJson(path, value)`
+    - writes object as JSON file
+  - `toJson(value)`
+    - converts object to JSON string
+
+`LineParser`
+
+- Role:
+  - parser strategy interface
+  - lets you change line parsing without changing the file reading flow
+
+### `monitoring.model`
+
+`MonitoringRecord`
+
+- Role:
+  - one parsed monitoring line
+  - contains `requestId`, `timestamp`, `dataType`, `value`
+
+`MonitoringDataType`
+
+- Role:
+  - enum for `P` and `A`
+  - `P` means monitoring value
+  - `A` means prediction value
+
+`MatchSummary`
+
+- Role:
+  - result of P/A comparison
+  - contains comparable count, matched count, unmatched count
+
+`TimeRange`
+
+- Role:
+  - reusable time window object
+  - used for filtering records
+
+`AgentInfo`
+
+- Role:
+  - metadata for one AI agent or model
+  - includes model name, agent id, display name, and data file path
+
+`TimeWindow`
+
+- Role:
+  - request DTO field for `startHour` and `endHour`
+
+`MonitoringReportRequest`
+
+- Role:
+  - HTTP request DTO sent by the client
+  - includes `modelName` and `timeWindow`
+
+`MonitoringReportResponse`
+
+- Role:
+  - HTTP response DTO returned by the server
+  - includes report status, agent info, summary, and monitoring records
+
+`ErrorResponse`
+
+- Role:
+  - simple error DTO returned when request validation or server processing fails
+
+### `monitoring.service`
+
+`AgentRegistry`
+
+- Role:
+  - in-memory model registry
+  - maps `modelName` to `AgentInfo`
+
+- Main methods:
+  - `register(agentInfo)`
+    - adds a model mapping
+  - `findByModelName(modelName)`
+    - finds one model mapping
+  - `createDefault()`
+    - creates a ready-to-run default registry for demos
+
+`MonitoringReportService`
+
+- Role:
+  - main business service
+  - validates request
+  - loads agent info
+  - reads monitoring data
+  - applies time filtering
+  - creates final response
+
+- Main method:
+  - `createReport(request)`
+    - full report generation pipeline
+
+### `monitoring.http`
+
+`MonitoringHttpClient`
+
+- Role:
+  - Jetty client wrapper for JSON communication
+
+- Main methods:
+  - `start()`
+    - starts the Jetty client
+  - `get(url)`
+    - simple GET request
+  - `get(url, headers)`
+    - GET request with headers
+  - `postJson(url, jsonString)`
+    - POST with raw JSON text
+  - `postJson(url, object)`
+    - POST with Java object converted to JSON
+  - `fromJson(json, type)`
+    - converts response JSON to Java object
+  - `close()`
+    - stops the client
+
+`MonitoringHttpServer`
+
+- Role:
+  - Jetty embedded server wrapper
+  - exposes `POST /monitoring/report`
+
+- Main methods:
+  - `MonitoringHttpServer(port)`
+    - creates server with default service and registry
+  - `MonitoringHttpServer(port, service)`
+    - creates server with custom service
+  - `start()`
+    - starts the server
+  - `stop()`
+    - stops the server
+  - `close()`
+    - stops the server for try-with-resources use
+
+### `monitoring.demo`
+
+`DemoMain`
+
+- Role:
+  - simplest full example
+  - shows file parsing and HTTP request/response in one run
+
+`ManualVerificationMain`
+
+- Role:
+  - reusable package smoke test
+  - useful after copy/paste into another project
+
 ## Input file format
 
 Monitoring data file example:
